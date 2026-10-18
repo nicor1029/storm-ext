@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.util.*
 import kotlin.collections.ArrayList
+import java.net.URLEncoder
 
 
 class DoramasYTProvider : MainAPI() {
@@ -88,7 +89,7 @@ class DoramasYTProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return app.get("$mainUrl/buscar?q=$query", timeout = 120).document.select("li.col").map {
+        return app.get("$mainUrl/buscar?q=${URLEncoder.encode(query, "UTF-8")}", timeout = 120).document.select("li.col").map {
             val title = it.selectFirst("h3")!!.text()
             val href = it.selectFirst("a")!!.attr("href")
             val image = it.selectFirst("img")!!.attr("data-src")
@@ -96,7 +97,7 @@ class DoramasYTProvider : MainAPI() {
                 title,
                 href,
                 this.name,
-                TvType.Anime,
+                TvType.AsianDrama,
                 image,
                 null,
                 if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
@@ -134,22 +135,13 @@ class DoramasYTProvider : MainAPI() {
 
         val capJson = app.post(caplist,
                 headers = mapOf(
-                        "Host" to "www.doramasyt.com",
-                        "User-Agent" to USER_AGENT,
-                        "Accept" to "application/json, text/javascript, */*; q=0.01",
-                        "Accept-Language" to "en-US,en;q=0.5",
-                        "Referer" to url,
-                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "Origin" to mainUrl,
-                        "DNT" to "1",
-                        "Alt-Used" to "www.doramasyt.com",
-                        "Connection" to "keep-alive",
-                        "Sec-Fetch-Dest" to "empty",
-                        "Sec-Fetch-Mode" to "cors",
-                        "Sec-Fetch-Site" to "same-origin",
-                        "TE" to "trailers"
-                ),
+    "User-Agent" to USER_AGENT,
+    "Accept" to "application/json, text/javascript, */*; q=0.01",
+    "Referer" to url,
+    "Origin" to mainUrl,
+    "X-Requested-With" to "XMLHttpRequest",
+    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8"
+),
                 cookies = latestCookie,
                 data = mapOf("_token" to latestToken)).parsed<CapList>()
 
@@ -158,7 +150,7 @@ class DoramasYTProvider : MainAPI() {
             newEpisode(
                     epUrl
             ){
-                this.episode = epnum.toString().toIntOrNull()
+                this.episode = this.episode = epnum.num
             }
         }
 
@@ -179,12 +171,19 @@ class DoramasYTProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         app.get(data).document.select("#myTab li").apmap {
-            val encodedurl = it.select(".play-video").attr("data-player")
-            val urlDecoded = base64Decode(encodedurl)
-            val url = (urlDecoded).replace("https://monoschinos2.com/reproductor?url=", "")
-                    .replace("https://sblona.com","https://watchsb.com").replace("https://swdyu.com","https://streamwish.to")
-            loadExtractor(url, mainUrl, subtitleCallback, callback)
-        }
-        return true
+    val encodedurl = it.select(".play-video").attr("data-player")
+    val urlDecoded = base64Decode(encodedurl)
+    val url = fixUrl(
+        urlDecoded.replace("https://monoschinos2.com/reproductor?url=", "")
+            .replace("https://sblona.com", "https://watchsb.com")
+            .replace("https://swdyu.com", "https://streamwish.to")
+    )
+    if (url.contains("ok.ru")) {
+        OkRuCustom().getUrl(url, mainUrl, subtitleCallback, callback)
+    } else {
+        loadExtractor(url, mainUrl, subtitleCallback, callback)
+    }
+}
+return true
     }
 }
